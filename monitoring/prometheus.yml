@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'underground-gis'
+    static_configs:
+      - targets:
+          - 'api:8004'
+          - 'ingestion:8000'
+          - 'transform:8001'
+          - 'storage:8002'
+          - 'ttl:8003'

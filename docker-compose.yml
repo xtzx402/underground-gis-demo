@@ -1,0 +1,102 @@
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - api
+    networks:
+      - gis-network
+
+  ingestion:
+    build: ./services/ingestion
+    environment:
+      - DB_URL=postgresql://postgres:postgres@db:5432/gisdb
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - gis-network
+
+  transform:
+    build: ./services/transform
+    networks:
+      - gis-network
+
+  storage:
+    build: ./services/storage
+    environment:
+      - DB_URL=postgresql://postgres:postgres@db:5432/gisdb
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - gis-network
+
+  api:
+    build: ./services/api
+    environment:
+      - INGESTION_URL=http://ingestion:8000
+      - TRANSFORM_URL=http://transform:8001
+      - STORAGE_URL=http://storage:8002
+      - TTL_URL=http://ttl:8003
+    depends_on:
+      - ingestion
+      - transform
+      - storage
+      - ttl
+    networks:
+      - gis-network
+
+  ttl:
+    build: ./services/ttl
+    environment:
+      - DB_URL=postgresql://postgres:postgres@db:5432/gisdb
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - gis-network
+
+  db:
+    image: postgis/postgis:15-3.3
+    environment:
+      - POSTGRES_DB=gisdb
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - gis-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gisdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - gis-network
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - gis-network
+
+networks:
+  gis-network:
+    driver: bridge
+
+volumes:
+  pgdata:
