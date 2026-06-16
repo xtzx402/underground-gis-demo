@@ -25,6 +25,8 @@ jobs:
 
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v1
+      with:
+        install_components: gke-gcloud-auth-plugin
 
     - name: Configure Docker for Artifact Registry
       run: gcloud auth configure-docker us-east1-docker.pkg.dev
@@ -59,23 +61,29 @@ jobs:
         gcloud container clusters get-credentials $GKE_CLUSTER \
           --region $GKE_REGION \
           --project $PROJECT_ID
+      env:
+        USE_GKE_GCLOUD_AUTH_PLUGIN: True
 
     - name: Deploy to GKE
+      env:
+        USE_GKE_GCLOUD_AUTH_PLUGIN: True
       run: |
-        kubectl set image deployment/ingestion ingestion=$REGISTRY/ingestion:$GITHUB_SHA --record || \
+        kubectl set image deployment/ingestion ingestion=$REGISTRY/ingestion:$GITHUB_SHA || \
         kubectl create deployment ingestion --image=$REGISTRY/ingestion:$GITHUB_SHA
         
-        kubectl set image deployment/transform transform=$REGISTRY/transform:$GITHUB_SHA --record || \
+        kubectl set image deployment/transform transform=$REGISTRY/transform:$GITHUB_SHA || \
         kubectl create deployment transform --image=$REGISTRY/transform:$GITHUB_SHA
         
-        kubectl set image deployment/storage storage=$REGISTRY/storage:$GITHUB_SHA --record || \
+        kubectl set image deployment/storage storage=$REGISTRY/storage:$GITHUB_SHA || \
         kubectl create deployment storage --image=$REGISTRY/storage:$GITHUB_SHA
         
-        kubectl set image deployment/api api=$REGISTRY/api:$GITHUB_SHA --record || \
+        kubectl set image deployment/api api=$REGISTRY/api:$GITHUB_SHA || \
         kubectl create deployment api --image=$REGISTRY/api:$GITHUB_SHA
         
-        kubectl set image deployment/ttl ttl=$REGISTRY/ttl:$GITHUB_SHA --record || \
+        kubectl set image deployment/ttl ttl=$REGISTRY/ttl:$GITHUB_SHA || \
         kubectl create deployment ttl --image=$REGISTRY/ttl:$GITHUB_SHA
 
     - name: Verify deployment
+      env:
+        USE_GKE_GCLOUD_AUTH_PLUGIN: True
       run: kubectl rollout status deployment/api
