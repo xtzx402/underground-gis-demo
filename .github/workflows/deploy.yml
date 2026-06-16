@@ -1,0 +1,81 @@
+name: Build and Deploy to GKE
+
+on:
+  push:
+    branches: [ master ]
+
+env:
+  PROJECT_ID: underground-gis-demo-499420
+  GKE_CLUSTER: underground-gis-cluster
+  GKE_REGION: us-east1
+  REGISTRY: us-east1-docker.pkg.dev/underground-gis-demo-499420/underground-gis
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+
+    - name: Configure Docker for Artifact Registry
+      run: gcloud auth configure-docker us-east1-docker.pkg.dev
+
+    - name: Build and push ingestion service
+      run: |
+        docker build -t $REGISTRY/ingestion:$GITHUB_SHA services/ingestion
+        docker push $REGISTRY/ingestion:$GITHUB_SHA
+
+    - name: Build and push transform service
+      run: |
+        docker build -t $REGISTRY/transform:$GITHUB_SHA services/transform
+        docker push $REGISTRY/transform:$GITHUB_SHA
+
+    - name: Build and push storage service
+      run: |
+        docker build -t $REGISTRY/storage:$GITHUB_SHA services/storage
+        docker push $REGISTRY/storage:$GITHUB_SHA
+
+    - name: Build and push api service
+      run: |
+        docker build -t $REGISTRY/api:$GITHUB_SHA services/api
+        docker push $REGISTRY/api:$GITHUB_SHA
+
+    - name: Build and push ttl service
+      run: |
+        docker build -t $REGISTRY/ttl:$GITHUB_SHA services/ttl
+        docker push $REGISTRY/ttl:$GITHUB_SHA
+
+    - name: Get GKE credentials
+      run: |
+        gcloud container clusters get-credentials $GKE_CLUSTER \
+          --region $GKE_REGION \
+          --project $PROJECT_ID
+
+    - name: Deploy to GKE
+      run: |
+        kubectl set image deployment/ingestion ingestion=$REGISTRY/ingestion:$GITHUB_SHA --record || \
+        kubectl create deployment ingestion --image=$REGISTRY/ingestion:$GITHUB_SHA
+        
+        kubectl set image deployment/transform transform=$REGISTRY/transform:$GITHUB_SHA --record || \
+        kubectl create deployment transform --image=$REGISTRY/transform:$GITHUB_SHA
+        
+        kubectl set image deployment/storage storage=$REGISTRY/storage:$GITHUB_SHA --record || \
+        kubectl create deployment storage --image=$REGISTRY/storage:$GITHUB_SHA
+        
+        kubectl set image deployment/api api=$REGISTRY/api:$GITHUB_SHA --record || \
+        kubectl create deployment api --image=$REGISTRY/api:$GITHUB_SHA
+        
+        kubectl set image deployment/ttl ttl=$REGISTRY/ttl:$GITHUB_SHA --record || \
+        kubectl create deployment ttl --image=$REGISTRY/ttl:$GITHUB_SHA
+
+    - name: Verify deployment
+      run: kubectl rollout status deployment/api
