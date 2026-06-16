@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ttl
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ttl
+  template:
+    metadata:
+      labels:
+        app: ttl
+    spec:
+      containers:
+      - name: ttl
+        image: us-east1-docker.pkg.dev/underground-gis-demo-499420/underground-gis/ttl:latest
+        ports:
+        - containerPort: 8003
+        env:
+        - name: DB_URL
+          value: "postgresql://postgres:postgres@db:5432/gisdb"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8003
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ttl
+spec:
+  selector:
+    app: ttl
+  ports:
+  - port: 8003
+    targetPort: 8003

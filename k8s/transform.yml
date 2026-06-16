@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: transform
+  template:
+    metadata:
+      labels:
+        app: transform
+    spec:
+      containers:
+      - name: transform
+        image: us-east1-docker.pkg.dev/underground-gis-demo-499420/underground-gis/transform:latest
+        ports:
+        - containerPort: 8001
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: transform
+spec:
+  selector:
+    app: transform
+  ports:
+  - port: 8001
+    targetPort: 8001

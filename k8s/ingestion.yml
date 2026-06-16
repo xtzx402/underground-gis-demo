@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingestion
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ingestion
+  template:
+    metadata:
+      labels:
+        app: ingestion
+    spec:
+      containers:
+      - name: ingestion
+        image: us-east1-docker.pkg.dev/underground-gis-demo-499420/underground-gis/ingestion:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DB_URL
+          value: "postgresql://postgres:postgres@db:5432/gisdb"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingestion
+spec:
+  selector:
+    app: ingestion
+  ports:
+  - port: 8000
+    targetPort: 8000

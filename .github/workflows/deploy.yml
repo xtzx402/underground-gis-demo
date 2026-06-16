@@ -31,30 +31,15 @@ jobs:
     - name: Configure Docker for Artifact Registry
       run: gcloud auth configure-docker us-east1-docker.pkg.dev
 
-    - name: Build and push ingestion service
+    - name: Build and push all services
       run: |
-        docker build -t $REGISTRY/ingestion:$GITHUB_SHA services/ingestion
-        docker push $REGISTRY/ingestion:$GITHUB_SHA
-
-    - name: Build and push transform service
-      run: |
-        docker build -t $REGISTRY/transform:$GITHUB_SHA services/transform
-        docker push $REGISTRY/transform:$GITHUB_SHA
-
-    - name: Build and push storage service
-      run: |
-        docker build -t $REGISTRY/storage:$GITHUB_SHA services/storage
-        docker push $REGISTRY/storage:$GITHUB_SHA
-
-    - name: Build and push api service
-      run: |
-        docker build -t $REGISTRY/api:$GITHUB_SHA services/api
-        docker push $REGISTRY/api:$GITHUB_SHA
-
-    - name: Build and push ttl service
-      run: |
-        docker build -t $REGISTRY/ttl:$GITHUB_SHA services/ttl
-        docker push $REGISTRY/ttl:$GITHUB_SHA
+        for service in ingestion transform storage api ttl; do
+          docker build -t $REGISTRY/$service:$GITHUB_SHA \
+                       -t $REGISTRY/$service:latest \
+                       services/$service
+          docker push $REGISTRY/$service:$GITHUB_SHA
+          docker push $REGISTRY/$service:latest
+        done
 
     - name: Get GKE credentials
       run: |
@@ -68,22 +53,20 @@ jobs:
       env:
         USE_GKE_GCLOUD_AUTH_PLUGIN: True
       run: |
-        kubectl set image deployment/ingestion ingestion=$REGISTRY/ingestion:$GITHUB_SHA || \
-        kubectl create deployment ingestion --image=$REGISTRY/ingestion:$GITHUB_SHA
-        
-        kubectl set image deployment/transform transform=$REGISTRY/transform:$GITHUB_SHA || \
-        kubectl create deployment transform --image=$REGISTRY/transform:$GITHUB_SHA
-        
-        kubectl set image deployment/storage storage=$REGISTRY/storage:$GITHUB_SHA || \
-        kubectl create deployment storage --image=$REGISTRY/storage:$GITHUB_SHA
-        
-        kubectl set image deployment/api api=$REGISTRY/api:$GITHUB_SHA || \
-        kubectl create deployment api --image=$REGISTRY/api:$GITHUB_SHA
-        
-        kubectl set image deployment/ttl ttl=$REGISTRY/ttl:$GITHUB_SHA || \
-        kubectl create deployment ttl --image=$REGISTRY/ttl:$GITHUB_SHA
+        kubectl apply -f k8s/
+
+    - name: Update images with new SHA
+      env:
+        USE_GKE_GCLOUD_AUTH_PLUGIN: True
+      run: |
+        for service in ingestion transform storage api ttl; do
+          kubectl set image deployment/$service \
+            $service=$REGISTRY/$service:$GITHUB_SHA
+        done
 
     - name: Verify deployment
       env:
         USE_GKE_GCLOUD_AUTH_PLUGIN: True
-      run: kubectl rollout status deployment/api
+      run: |
+        kubectl rollout status deployment/api
+        kubectl rollout status deployment/ingestion
